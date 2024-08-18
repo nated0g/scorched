@@ -1,6 +1,6 @@
 use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
 
-use noise::{NoiseFn, PerlinSurflet, Seedable};
+use noise::{NoiseFn, Perlin, PerlinSurflet, Seedable};
 use rand::RngCore;
 
 /*
@@ -43,6 +43,8 @@ use rand::RngCore;
 
 This is a rough clone of my favourite old DOS game, Scorched Earth. It's a work in progress, not playable yet.
 */
+
+use simple_moving_average::{SumTreeSMA, SMA};
 
 fn main() {
     App::new()
@@ -106,9 +108,9 @@ struct Turret;
 
 const TANK_COLOR: Color = Color::srgb(0.0, 1.0, 0.0);
 const TURRET_COLOR: Color = Color::srgb(0.1, 0.7, 0.1);
-const TANK_RADIUS: f32 = 10.;
-const TURRET_LENGTH: f32 = TANK_RADIUS * 1.8;
-const TURRET_WIDTH: f32 = TANK_RADIUS / 5.;
+const TANK_RADIUS: f32 = 8.;
+const TURRET_LENGTH: f32 = TANK_RADIUS * 2.;
+const TURRET_WIDTH: f32 = TANK_RADIUS / 2.;
 
 const GRAVITY: f32 = -980.;
 
@@ -208,15 +210,24 @@ fn setup(
     let window_width = window.width();
     // generate the terrain with perlin noise
     let mut rng = rand::thread_rng();
-    let perlin = PerlinSurflet::default().set_seed(rng.next_u32());
+    let perlin = Perlin::default().set_seed(rng.next_u32());
 
-    // we're just going to sweep the x axis and define a height at each point
-    for x in -(window_width / 2.) as i32..(window_width / 2.) as i32 {
-        let y = perlin.get([(x + 500) as f64 * 0.001, x as f64 * 0.001]) as f32 * 500.;
+    let mut ma = SumTreeSMA::<_, f32, 200>::new();
+
+    let x_terrain_granularity = 1.;
+    for x in (-(window_width / 2. * x_terrain_granularity) as i32
+        ..(window_width / 2. * x_terrain_granularity) as i32)
+        .step_by(x_terrain_granularity as usize)
+    {
+        let y_raw = perlin.get([x as f64 * 0.005, x as f64 * 0.001]) as f32 * 800.;
+
+        ma.add_sample(y_raw.abs());
+        let y = ma.get_average();
+        dbg!(y, y_raw);
         commands.spawn((
             MaterialMesh2dBundle {
                 mesh: meshes
-                    .add(Rectangle::from_size(Vec2::new(1.0, y.abs())))
+                    .add(Rectangle::from_size(Vec2::new(x_terrain_granularity, y)))
                     .into(),
                 material: materials.add(ColorMaterial::default()),
                 transform: Transform::from_translation(Vec3::new(
