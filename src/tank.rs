@@ -53,7 +53,7 @@ fn setup(
     let window = window_query.single();
     let texture_handle = terrain_query.single();
     let tank_x = rand::thread_rng().gen_range(-window.width() / 2.0..window.width() / 2.0);
-    let tank_y = get_terrain_height(&images, &texture_handle, tank_x, window.height());
+    let tank_y = get_terrain_height(&images, texture_handle, tank_x, window.height());
 
     // Tank body
     commands

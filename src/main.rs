@@ -36,7 +36,7 @@
  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀
 
 
-This is a rough clone of my favourite old DOS game, Scorched Earth. It's a work in progress, not playable yet.
+This is a rough clone of my favourite old DOS game, Scorched Earth, using Bevy. It's a work in progress.
 */
 use bevy::prelude::*;
 
@@ -46,16 +46,32 @@ mod tank;
 mod terrain;
 mod ui;
 
+use explosions::Plugin as ExplosionsPlugin;
+use projectiles::Plugin as ProjectilesPlugin;
+use tank::Plugin as TankPlugin;
+use terrain::Plugin as TerrainPlugin;
+use ui::Plugin as UiPlugin;
+
 pub const GRAVITY: f32 = -980.;
 
 fn main() {
     App::new()
         // .insert_resource(ImageSettings::default_nearest()) // Ensure nearest-neighbor scaling
         .add_plugins(DefaultPlugins)
-        .add_plugins(terrain::Plugin)
-        .add_plugins(tank::Plugin)
-        .add_plugins(ui::Plugin)
-        .add_plugins(projectiles::Plugin)
-        .add_plugins(explosions::Plugin)
+        .add_plugins(TerrainPlugin)
+        .add_plugins(TankPlugin)
+        .add_plugins(UiPlugin)
+        .add_plugins(ProjectilesPlugin)
+        .add_plugins(ExplosionsPlugin)
         .run();
 }
+
+// TODOs:
+//
+// - Add a "wind" factor that affects the trajectory of the projectiles
+// - Refactor to be more event driven
+// - Add multiple tanks
+// - Add state machine for game state (ie, turn system)
+// - Add multiple weapons
+// - Add gravity to terrain
+// - Improve phyiscs for projectiles
