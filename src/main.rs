@@ -1,8 +1,3 @@
-use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
-
-use noise::{NoiseFn, Perlin, PerlinSurflet, Seedable};
-use rand::RngCore;
-
 /*
                 ⠀⠀⠀⠀⠀⢀⣠⣤⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
                 ⠀⠀⢀⣴⠿⢫⣯⣍⣉⠙⢷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -44,10 +39,21 @@ use rand::RngCore;
 This is a rough clone of my favourite old DOS game, Scorched Earth. It's a work in progress, not playable yet.
 */
 
+use bevy::{
+    prelude::*,
+    render::{
+        render_asset::RenderAssetUsages,
+        render_resource::{Extent3d, TextureDimension, TextureFormat},
+    },
+    sprite::MaterialMesh2dBundle,
+};
+use noise::{NoiseFn, Perlin, Seedable};
+use rand::{Rng, RngCore};
 use simple_moving_average::{SumTreeSMA, SMA};
 
 fn main() {
     App::new()
+        // .insert_resource(ImageSettings::default_nearest()) // Ensure nearest-neighbor scaling
         .add_plugins(DefaultPlugins)
         .add_event::<FireProjectile>()
         .add_systems(Startup, setup)
@@ -59,6 +65,7 @@ fn main() {
                 move_projectile,
                 adjust_power,
                 update_ui,
+                update_terrain,
             ),
         )
         .run();
@@ -76,54 +83,158 @@ struct Angle(f32);
 #[derive(Component)]
 struct Power(f32);
 
-// #[derive(Component)]
-// struct Gravity(f32);
-
-// #[derive(Component)]
-// struct Wind(f32);
-
 #[derive(Component)]
 struct Projectile {
     velocity: Vec2,
+    blast_radius: f32,
 }
-
-const MINIMUM_POWER: f32 = 250.;
 
 #[derive(Component)]
 struct Terrain;
+
+#[derive(Component)]
+struct Turret;
+
+#[derive(Component)]
+struct TerrainTexture(Handle<Image>);
+
+#[derive(Event, Default)]
+struct FireProjectile;
+
+const MINIMUM_POWER: f32 = 250.;
+const TANK_COLOR: Color = Color::srgb(0.0, 1.0, 0.0);
+const TURRET_COLOR: Color = Color::srgb(0.1, 0.7, 0.1);
+const TANK_RADIUS: f32 = 10.;
+const TURRET_LENGTH: f32 = TANK_RADIUS * 2.;
+const TURRET_WIDTH: f32 = TANK_RADIUS / 2.;
+const GRAVITY: f32 = -980.;
+const TURRET_ROTATION_SPEED: f32 = 0.5; // rotations per second
 
 impl Projectile {
     fn new((angle, power): (&Angle, &Power)) -> Self {
         let angle = angle.0.to_radians();
         let velocity = Vec2::new(angle.cos(), angle.sin()) * (power.0 + MINIMUM_POWER);
-        Projectile { velocity }
+        Projectile {
+            velocity,
+            blast_radius: 50.,
+        }
     }
 }
 
-#[derive(Event, Default)]
-struct FireProjectile;
+fn get_terrain_height(
+    images: &ResMut<Assets<Image>>,
+    texture_handle: &Handle<Image>,
+    x: f32,
+    window_height: f32,
+) -> f32 {
+    if let Some(texture) = images.get(texture_handle) {
+        let width = texture.size().x as f32;
+        let height = texture.size().y as f32;
+        let x = (x + width / 2.0).clamp(0.0, width - 1.0) as u32;
 
-#[derive(Component)]
-struct Turret;
-
-const TANK_COLOR: Color = Color::srgb(0.0, 1.0, 0.0);
-const TURRET_COLOR: Color = Color::srgb(0.1, 0.7, 0.1);
-const TANK_RADIUS: f32 = 8.;
-const TURRET_LENGTH: f32 = TANK_RADIUS * 2.;
-const TURRET_WIDTH: f32 = TANK_RADIUS / 2.;
-
-const GRAVITY: f32 = -980.;
+        for y in 0..height as u32 {
+            let index = (y * texture.size().x + x) as usize * 4;
+            if texture.data[index + 3] != 0 {
+                let flipped_y = height as u32 - 1 - y; // Flip the y-coordinate
+                return flipped_y as f32 - height / 2.0;
+            }
+        }
+    }
+    -window_height / 2.0
+}
 
 fn setup(
     mut commands: Commands,
     window_query: Query<&Window>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     let window = window_query.single();
     // Camera
     commands.spawn(Camera2dBundle::default());
 
+    commands.spawn((
+        UiText,
+        TextBundle::from_sections([
+            TextSection::new(
+                "Power: ",
+                TextStyle {
+                    font_size: 20.0,
+                    color: TANK_COLOR,
+                    ..default()
+                },
+            ),
+            TextSection::from_style(TextStyle {
+                font_size: 20.0,
+                color: TANK_COLOR,
+                ..default()
+            }),
+            TextSection::new(
+                " Angle: ",
+                TextStyle {
+                    font_size: 20.0,
+                    color: TANK_COLOR,
+                    ..default()
+                },
+            ),
+            TextSection::from_style(TextStyle {
+                font_size: 20.0,
+                color: TANK_COLOR,
+                ..default()
+            }),
+        ]),
+    ));
+
+    // Create the terrain texture
+    let texture_size = Extent3d {
+        width: window.width() as u32,
+        height: window.height() as u32,
+        depth_or_array_layers: 1,
+    };
+    let mut texture = Image::new_fill(
+        texture_size,
+        TextureDimension::D2,
+        &[0, 0, 0, 0],
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::default(),
+    );
+
+    // Generate the initial terrain using Perlin noise
+    let mut rng = rand::thread_rng();
+    let perlin = Perlin::default().set_seed(rng.next_u32());
+    let mut ma = SumTreeSMA::<_, f32, 200>::new();
+
+    for x in 0..texture_size.width {
+        let y_raw = perlin.get([x as f64 * 0.005, x as f64 * 0.001]) as f32 * 800.;
+        ma.add_sample(y_raw.abs());
+        let y = ma.get_average();
+
+        for y_cur in 0..(y as u32) {
+            let flipped_y = texture_size.height - 1 - y_cur;
+            let index = (flipped_y * texture_size.width + x) as usize * 4;
+            texture.data[index] = 255; // R
+            texture.data[index + 1] = 255; // G
+            texture.data[index + 2] = 255; // B
+            texture.data[index + 3] = 255; // A
+        }
+    }
+
+    let texture_handle = images.add(texture);
+
+    // Spawn the terrain entity with the texture
+    commands.spawn((
+        SpriteBundle {
+            texture: texture_handle.clone(),
+            transform: Transform::from_translation(Vec3::new(0., 0., 0.)),
+            ..default()
+        },
+        Terrain,
+        TerrainTexture(texture_handle.clone()),
+    ));
+
+    let tank_x = rand::thread_rng().gen_range(-window.width() / 2.0..window.width() / 2.0);
+    let tank_y = get_terrain_height(&images, &texture_handle, tank_x, window.height());
     // Tank body
     commands
         .spawn((
@@ -132,7 +243,7 @@ fn setup(
                     .add(CircularSector::from_degrees(TANK_RADIUS, 180.))
                     .into(),
                 material: materials.add(TANK_COLOR),
-                transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
+                transform: Transform::from_translation(Vec3::new(tank_x, tank_y, 1.)),
                 ..default()
             },
             Tank,
@@ -176,73 +287,7 @@ fn setup(
                 },));
             });
         });
-    commands.spawn((
-        UiText,
-        TextBundle::from_sections([
-            TextSection::new(
-                "Power: ",
-                TextStyle {
-                    font_size: 20.0,
-                    color: TANK_COLOR,
-                    ..default()
-                },
-            ),
-            TextSection::from_style(TextStyle {
-                font_size: 20.0,
-                color: TANK_COLOR,
-                ..default()
-            }),
-            TextSection::new(
-                " Angle: ",
-                TextStyle {
-                    font_size: 20.0,
-                    color: TANK_COLOR,
-                    ..default()
-                },
-            ),
-            TextSection::from_style(TextStyle {
-                font_size: 20.0,
-                color: TANK_COLOR,
-                ..default()
-            }),
-        ]),
-    ));
-    let window_width = window.width();
-    // generate the terrain with perlin noise
-    let mut rng = rand::thread_rng();
-    let perlin = Perlin::default().set_seed(rng.next_u32());
-
-    let mut ma = SumTreeSMA::<_, f32, 200>::new();
-
-    let x_terrain_granularity = 1.;
-    for x in (-(window_width / 2. * x_terrain_granularity) as i32
-        ..(window_width / 2. * x_terrain_granularity) as i32)
-        .step_by(x_terrain_granularity as usize)
-    {
-        let y_raw = perlin.get([x as f64 * 0.005, x as f64 * 0.001]) as f32 * 800.;
-
-        ma.add_sample(y_raw.abs());
-        let y = ma.get_average();
-        dbg!(y, y_raw);
-        commands.spawn((
-            MaterialMesh2dBundle {
-                mesh: meshes
-                    .add(Rectangle::from_size(Vec2::new(x_terrain_granularity, y)))
-                    .into(),
-                material: materials.add(ColorMaterial::default()),
-                transform: Transform::from_translation(Vec3::new(
-                    x as f32,
-                    -(window.height() / 2.) + (y.abs() / 2.),
-                    0.0,
-                )),
-                ..default()
-            },
-            Terrain,
-        ));
-    }
 }
-
-const TURRET_ROTATION_SPEED: f32 = 0.5; // rotations per second
 
 fn fire_projectile(
     keyboard_input: Res<ButtonInput<KeyCode>>,
@@ -345,4 +390,63 @@ fn update_ui(
     let mut ui_text = ui_query.single_mut();
     ui_text.sections[1].value = format!("{: >4.0}", power.0);
     ui_text.sections[3].value = format!("{:.1}", angle.0);
+}
+
+fn create_explosion(texture: &mut Image, x: u32, y: u32, radius: f32) {
+    let width = texture.size().x;
+    let height = texture.size().y;
+    let radius_squared = radius * radius;
+
+    for dx in -(radius as i32)..=(radius as i32) {
+        for dy in -(radius as i32)..=(radius as i32) {
+            let distance_squared = (dx * dx + dy * dy) as f32;
+            if distance_squared <= radius_squared {
+                let nx = x as i32 + dx;
+                let ny = y as i32 + dy;
+
+                if nx >= 0 && nx < width as i32 && ny >= 0 && ny < height as i32 {
+                    let index = (ny as u32 * width + nx as u32) as usize * 4;
+                    texture.data[index] = 0; // R
+                    texture.data[index + 1] = 0; // G
+                    texture.data[index + 2] = 0; // B
+                    texture.data[index + 3] = 0; // A
+                }
+            }
+        }
+    }
+}
+
+fn update_terrain(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut Projectile)>,
+    mut terrain_query: Query<&Handle<Image>, With<TerrainTexture>>,
+    mut images: ResMut<Assets<Image>>,
+    time: Res<Time>,
+) {
+    for (entity, mut transform, mut projectile) in query.iter_mut() {
+        projectile.velocity.y += GRAVITY * time.delta_seconds();
+        transform.translation += projectile.velocity.extend(1.) * time.delta_seconds();
+
+        // Check for collision with terrain and update the texture
+        for texture_handle in terrain_query.iter_mut() {
+            if let Some(texture) = images.get_mut(texture_handle) {
+                let x = (transform.translation.x + texture.size().x as f32 / 2.0) as u32;
+                let y = (transform.translation.y + texture.size().y as f32 / 2.0) as u32;
+
+                if x < texture.size().x && y < texture.size().y {
+                    let flipped_y = texture.size().y - 1 - y; // Flip the y-coordinate
+                    let index = (flipped_y * texture.size().x + x) as usize * 4;
+
+                    // Check if the projectile hits the terrain
+                    if texture.data[index + 3] != 0 {
+                        // Create an explosion effect
+                        create_explosion(texture, x, flipped_y, projectile.blast_radius);
+
+                        // Remove the projectile
+                        commands.entity(entity).despawn();
+                    }
+                }
+            }
+        }
+    }
 }
