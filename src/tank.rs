@@ -26,10 +26,10 @@ pub struct HitPoints {
 }
 
 const TURRET_COLOR: Color = Color::srgb(0.1, 0.7, 0.1);
-pub const TANK_RADIUS: f32 = 10.;
+pub const TANK_RADIUS: f32 = 5.;
 const TURRET_LENGTH: f32 = TANK_RADIUS * 2.;
-const TURRET_WIDTH: f32 = TANK_RADIUS / 2.;
-pub const TURRET_ROTATION_SPEED: f32 = 0.2; // rotations per second
+const TURRET_WIDTH: f32 = TANK_RADIUS / 2.2;
+pub const TURRET_ROTATION_SPEED: f32 = 0.1; // rotations per second
 pub const TANK_COLOR: Color = Color::srgb(0.0, 1.0, 0.0);
 
 pub struct Plugin;

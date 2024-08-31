@@ -5,7 +5,7 @@ use crate::{
     GRAVITY,
 };
 
-const MINIMUM_POWER: f32 = 250.;
+const MINIMUM_POWER: f32 = 200.;
 
 #[derive(Event, Default)]
 pub struct FireProjectile;
@@ -31,7 +31,7 @@ impl Projectile {
         let velocity = Vec2::new(angle.cos(), angle.sin()) * (power.0 + MINIMUM_POWER);
         Projectile {
             velocity,
-            blast_radius: 50.,
+            blast_radius: 30.,
         }
     }
 }

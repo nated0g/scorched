@@ -16,7 +16,6 @@ impl bevy::app::Plugin for Plugin {
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
     commands.spawn((
         UiText,
         TextBundle::from_sections([
@@ -72,6 +71,6 @@ fn update_ui(
     let hit_points = tank_query.single();
     let mut ui_text = ui_query.single_mut();
     ui_text.sections[1].value = format!("{: >4.0}", power.0);
-    ui_text.sections[3].value = format!("{: >3.1}", angle.0);
+    ui_text.sections[3].value = format!("{: >5.1}", angle.0);
     ui_text.sections[5].value = format!("{: >4.0}%", hit_points.current * 100 / hit_points.max);
 }

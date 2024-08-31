@@ -41,23 +41,54 @@ This is a rough clone of my favourite old DOS game, Scorched Earth, using Bevy. 
 use bevy::prelude::*;
 
 mod explosions;
+mod pixel_camera;
 mod projectiles;
 mod tank;
 mod terrain;
 mod ui;
 
+use bevy::window::{PresentMode, WindowResolution, WindowTheme};
+
 use explosions::Plugin as ExplosionsPlugin;
+use pixel_camera::Plugin as PixelCameraPlugin;
 use projectiles::Plugin as ProjectilesPlugin;
 use tank::Plugin as TankPlugin;
 use terrain::Plugin as TerrainPlugin;
 use ui::Plugin as UiPlugin;
 
 pub const GRAVITY: f32 = -980.;
+/// In-game resolution width.
+static RES_WIDTH: u32 = 1168;
+
+/// In-game resolution height.
+static RES_HEIGHT: u32 = 755;
 
 fn main() {
     App::new()
-        // .insert_resource(ImageSettings::default_nearest()) // Ensure nearest-neighbor scaling
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "scorched".into(),
+                name: Some("scorched.app".into()),
+                resolution: WindowResolution::new(RES_WIDTH as f32, RES_HEIGHT as f32),
+                present_mode: PresentMode::AutoVsync,
+                fit_canvas_to_parent: true,
+                prevent_default_event_handling: false,
+                window_theme: Some(WindowTheme::Dark),
+                enabled_buttons: bevy::window::EnabledButtons {
+                    maximize: true,
+                    ..Default::default()
+                },
+                visible: true,
+                // I think we can use this to disable rendering differences in the alpha channel
+                // this will allow us to use the alpha channel as a data channel instead,
+                // for things like "hardness" of terrain, etc.
+                // composite_alpha_mode: todo!(),
+                ..default()
+            }),
+            ..default()
+        }))
+        .insert_resource(Msaa::Off)
+        .add_plugins(PixelCameraPlugin(&RES_WIDTH, &RES_HEIGHT))
         .add_plugins(TerrainPlugin)
         .add_plugins(TankPlugin)
         .add_plugins(UiPlugin)
@@ -65,13 +96,3 @@ fn main() {
         .add_plugins(ExplosionsPlugin)
         .run();
 }
-
-// TODOs:
-//
-// - Add a "wind" factor that affects the trajectory of the projectiles
-// - Refactor to be more event driven
-// - Add multiple tanks
-// - Add state machine for game state (ie, turn system)
-// - Add multiple weapons
-// - Add gravity to terrain
-// - Improve phyiscs for projectiles
