@@ -40,3 +40,5 @@
 
 This is a rough clone of my favourite old DOS game, Scorched Earth. It's a work in progress, not playable yet.
 It's written in Rust and uses the Bevy game engine.
+
+[Try it out!](https://nateusher.com/scorched)
