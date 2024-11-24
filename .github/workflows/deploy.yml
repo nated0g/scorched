@@ -29,6 +29,9 @@ jobs:
       - name: Generate wasm bindings
         run: wasm-bindgen --out-dir ./out --target web ./target/wasm32-unknown-unknown/release/scorched.wasm
 
+      - name: Copy index.html
+        run: cp index.html ./out/index.html
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
