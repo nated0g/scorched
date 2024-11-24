@@ -41,13 +41,14 @@ This is a rough clone of my favourite old DOS game, Scorched Earth, using Bevy. 
 use bevy::prelude::*;
 
 mod explosions;
+mod game_state;
 mod pixel_camera;
 mod projectiles;
 mod tank;
 mod terrain;
 mod ui;
 
-use bevy::window::{PresentMode, WindowResolution, WindowTheme};
+use bevy::window::{PresentMode, WindowMode, WindowResolution, WindowTheme};
 
 use explosions::Plugin as ExplosionsPlugin;
 use pixel_camera::Plugin as PixelCameraPlugin;
@@ -74,6 +75,7 @@ fn main() {
                 fit_canvas_to_parent: true,
                 prevent_default_event_handling: false,
                 window_theme: Some(WindowTheme::Dark),
+                mode: WindowMode::BorderlessFullscreen,
                 enabled_buttons: bevy::window::EnabledButtons {
                     maximize: true,
                     ..Default::default()

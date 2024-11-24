@@ -27,7 +27,7 @@ impl bevy::app::Plugin for Plugin {
                     let h_scale = event.width / *res_width as f32;
                     let v_scale = event.height / *res_height as f32;
                     let mut projection = projections.single_mut();
-                    projection.scale = 0.9 / h_scale.min(v_scale).round();
+                    projection.scale = 1. / h_scale.min(v_scale).round();
                 }
             },
         );

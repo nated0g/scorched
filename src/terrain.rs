@@ -1,3 +1,5 @@
+use std::{thread::sleep, time::Duration};
+
 use bevy::{
     app::{App, Startup},
     asset::Assets,
@@ -11,7 +13,7 @@ use bevy::{
     window::Window,
 };
 use noise::{NoiseFn, Perlin, Seedable};
-use rand::RngCore;
+use rand::{Rng, RngCore};
 use simple_moving_average::{SumTreeSMA, SMA};
 
 use crate::{explosions::Explosion, projectiles::Projectile};
@@ -22,8 +24,6 @@ pub struct Terrain;
 #[derive(Component)]
 pub struct TerrainTexture;
 
-const BROWN_COLOR: [u8; 4] = [120, 60, 15, 255]; // Brown color for the terrain
-const GREEN_COLOR: [u8; 4] = [34, 139, 34, 255]; // Green color for the top of the terrain
 const EXPLOSION_COLOR: Color = Color::srgb(1.0, 0.5, 0.0); // Orange color for the explosion
 const GREEN_HEIGHT: u32 = 25; // Height of the green part of the terrain
 const EXPLOSION_DURATION: f32 = 0.2; // Duration of the explosion effect in seconds
@@ -57,6 +57,20 @@ fn setup_terrain(
         RenderAssetUsages::default(),
     );
 
+    let brown: [u8; 4] = [
+        rand::thread_rng().gen_range(100..=150),
+        rand::thread_rng().gen_range(40..=100),
+        rand::thread_rng().gen_range(0..=60),
+        255,
+    ];
+
+    let green: [u8; 4] = [
+        rand::thread_rng().gen_range(0..=150),
+        rand::thread_rng().gen_range(100..=255),
+        rand::thread_rng().gen_range(0..=100),
+        255,
+    ];
+
     // Generate the initial terrain using Perlin noise
     let mut rng = rand::thread_rng();
     let perlin = Perlin::default().set_seed(rng.next_u32());
@@ -71,9 +85,9 @@ fn setup_terrain(
             let flipped_y = texture_size.height - 1 - y_cur;
             let index = (flipped_y * texture_size.width + x) as usize * 4;
             if y_cur >= (y as u32).saturating_sub(GREEN_HEIGHT) {
-                texture.data[index..index + 4].copy_from_slice(&GREEN_COLOR);
+                texture.data[index..index + 4].copy_from_slice(&green);
             } else {
-                texture.data[index..index + 4].copy_from_slice(&BROWN_COLOR);
+                texture.data[index..index + 4].copy_from_slice(&brown);
             }
         }
     }
