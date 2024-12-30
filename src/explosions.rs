@@ -1,8 +1,10 @@
 use bevy::prelude::*;
 
-use crate::tank::{HitPoints, Tank};
+use crate::{
+    projectiles::ProjectileInFlight,
+    tank::{HitPoints, NextTurn, Tank},
+};
 
-// TODO: Make a "new" impl
 #[derive(Component)]
 pub struct Explosion {
     pub timer: Timer,
@@ -22,45 +24,56 @@ impl bevy::app::Plugin for Plugin {
 fn explosion(
     mut commands: Commands,
     time: Res<Time>,
-    mut query: Query<
-        (
-            Entity,
-            &mut Explosion,
-            &mut Transform,
-            &Handle<ColorMaterial>,
-        ),
+    mut explosion_query: Query<
+        (Entity, &mut Explosion, &Transform, &Handle<ColorMaterial>),
         Without<Tank>,
     >,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut tank_query: Query<(&mut Transform, &mut HitPoints), With<Tank>>,
+    mut tank_query: Query<(&GlobalTransform, &mut HitPoints), With<Tank>>,
+    mut projectile_in_flight: ResMut<ProjectileInFlight>,
 ) {
-    for (entity, mut explosion, mut transform, material_handle) in query.iter_mut() {
+    for (entity, mut explosion, explosion_transform, material_handle) in explosion_query.iter_mut()
+    {
         explosion.timer.tick(time.delta());
 
-        // Calculate the progress of the explosion (0.0 to 1.0)
         let progress = explosion.timer.fraction();
+        explosion.scale = 1.0 + progress * 2.0;
+        explosion.opacity = 1.0 - progress;
 
-        // Update the scale and opacity based on the progress
-        explosion.scale = 1.0 + progress * 2.0; // Expand the explosion
-        explosion.opacity = 1.0 - progress; // Fade out the explosion
-
-        // Apply the scale and opacity to the transform and material
-        transform.scale = Vec3::splat(explosion.scale);
         if let Some(material) = materials.get_mut(material_handle) {
             material.color.set_alpha(explosion.opacity);
         }
 
         if explosion.timer.finished() {
-            // Apply damage to tanks within the blast radius
+            info!("Explosion finished, checking for damage");
             for (tank_transform, mut hit_points) in tank_query.iter_mut() {
-                let distance = transform.translation.distance(tank_transform.translation);
-                if distance < explosion.blast_radius {
-                    hit_points.current = hit_points.current.saturating_sub(10); // Decrease hit points by 10
+                let explosion_pos = explosion_transform.translation;
+                let tank_pos = tank_transform.translation();
+                let distance = explosion_pos.distance(tank_pos);
+
+                info!(
+                    "Tank check - Distance: {}, Blast radius: {}",
+                    distance, explosion.blast_radius
+                );
+
+                if distance <= (explosion.blast_radius * 1.25) {
+                    // Calculate damage based on distance from explosion center
+                    let damage_multiplier = 1.0 - (distance / (explosion.blast_radius * 2.0));
+                    let max_damage = 100;
+                    let damage = (max_damage as f32 * damage_multiplier) as u32;
+
+                    let old_health = hit_points.current;
+                    hit_points.current = hit_points.current.saturating_sub(damage);
+
+                    info!(
+                        "DIRECT HIT! Distance: {}, Damage: {}, Health: {} -> {}",
+                        distance, damage, old_health, hit_points.current
+                    );
                 }
             }
 
-            // Remove the explosion effect
             commands.entity(entity).despawn();
+            projectile_in_flight.0 = false;
         }
     }
 }
